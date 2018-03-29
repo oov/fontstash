@@ -106,11 +106,12 @@ FONS_DEF int fonsExpandAtlas(FONScontext* s, int width, int height);
 // Resets the whole stash.
 FONS_DEF int fonsResetAtlas(FONScontext* stash, int width, int height);
 
-// Add fonts
+// Add/delete fonts
 FONS_DEF int fonsAddFont(FONScontext* s, const char* name, const char* path);
 FONS_DEF int fonsAddFontMem(FONScontext* s, const char* name, unsigned char* data, int ndata, int freeData);
 FONS_DEF int fonsGetFontByName(FONScontext* s, const char* name);
 FONS_DEF int fonsAddFallbackFont(FONScontext* stash, int base, int fallback);
+FONS_DEF int fonsDeleteFont(FONScontext* s, int font);
 
 // State handling
 FONS_DEF void fonsPushState(FONScontext* s);
@@ -860,6 +861,17 @@ static void fons__freeFont(FONSfont* font)
 	free(font);
 }
 
+int fonsDeleteFont(FONScontext* stash, int font)
+{
+	FONSfont* f = stash->fonts[font];
+	if (f == NULL) {
+		return 0;
+	}
+	fons__freeFont(f);
+	stash->fonts[font] = NULL;
+	return 1;
+}
+
 static int fons__allocFont(FONScontext* stash)
 {
 	FONSfont* font = NULL;
@@ -990,7 +1002,7 @@ int fonsGetFontByName(FONScontext* s, const char* name)
 {
 	int i;
 	for (i = 0; i < s->nfonts; i++) {
-		if (strcmp(s->fonts[i]->name, name) == 0)
+		if (s->fonts[i] != NULL && strcmp(s->fonts[i]->name, name) == 0)
 			return i;
 	}
 	return FONS_INVALID;
@@ -1320,7 +1332,7 @@ FONS_DEF float fonsDrawText(FONScontext* stash,
 	if (stash == NULL) return x;
 	if (state->font < 0 || state->font >= stash->nfonts) return x;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return x;
+	if (font == NULL || font->data == NULL) return x;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
@@ -1376,7 +1388,7 @@ FONS_DEF int fonsTextIterInit(FONScontext* stash, FONStextIter* iter,
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	iter->font = stash->fonts[state->font];
-	if (iter->font->data == NULL) return 0;
+	if (iter->font == NULL || iter->font->data == NULL) return 0;
 
 	iter->isize = (short)(state->size*10.0f);
 	iter->iblur = (short)state->blur;
@@ -1506,7 +1518,7 @@ FONS_DEF float fonsTextBounds(FONScontext* stash,
 	if (stash == NULL) return 0;
 	if (state->font < 0 || state->font >= stash->nfonts) return 0;
 	font = stash->fonts[state->font];
-	if (font->data == NULL) return 0;
+	if (font == NULL || font->data == NULL) return 0;
 
 	scale = fons__tt_getPixelHeightScale(&font->font, (float)isize/10.0f);
 
@@ -1573,7 +1585,7 @@ FONS_DEF void fonsVertMetrics(FONScontext* stash,
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
+	if (font == NULL || font->data == NULL) return;
 
 	if (ascender)
 		*ascender = font->ascender*isize/10.0f;
@@ -1593,7 +1605,7 @@ FONS_DEF void fonsLineBounds(FONScontext* stash, float y, float* miny, float* ma
 	if (state->font < 0 || state->font >= stash->nfonts) return;
 	font = stash->fonts[state->font];
 	isize = (short)(state->size*10.0f);
-	if (font->data == NULL) return;
+	if (font == NULL || font->data == NULL) return;
 
 	y += fons__getVertAlign(stash, font, state->align, isize);
 
@@ -1751,6 +1763,7 @@ FONS_DEF int fonsResetAtlas(FONScontext* stash, int width, int height)
 	// Reset cached glyphs
 	for (i = 0; i < stash->nfonts; i++) {
 		FONSfont* font = stash->fonts[i];
+		if (font == NULL) continue;
 		font->nglyphs = 0;
 		for (j = 0; j < FONS_HASH_LUT_SIZE; j++)
 			font->lut[j] = -1;
